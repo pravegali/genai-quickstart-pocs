@@ -1,5 +1,6 @@
 import streamlit as st
 from query_against_knowledgeBases import answer_query
+from query_against_knowledgeBases import get_contexts
 
 # Header/Title of streamlit app
 st.title(f""":rainbow[RAG with Amazon Knowledge Bases]""")
@@ -28,11 +29,19 @@ if question := st.chat_input("Ask about your data stored in Amazon Knowledge Bas
         # putting a spinning icon to show that the query is in progress
         with st.status("Determining the best possible answer!", expanded=False) as status:
             # passing the question into the OpenSearch search function, which later invokes the llm
-            answer = answer_query(question)
+            result = answer_query(question)
+            # #printing the result
+            # print(result)
             # writing the answer to the front end
-            message_placeholder.markdown(f"{answer}")
+            message_placeholder.markdown(f"{result['answer']}")
+            
             # showing a completion message to the front end
             status.update(label="Question Answered...", state="complete", expanded=False)
+            
+            # writing the context to the front end
+            st.write(f"Context: {result['context']}")
+            
+            
     # appending the results to the session state
     st.session_state.messages.append({"role": "assistant",
-                                      "content": answer})
+                                      "content": result['answer']})

@@ -2,6 +2,7 @@ import boto3
 import json
 from dotenv import load_dotenv
 import os
+import requests
 
 
 # loading in variables from .env file
@@ -79,32 +80,71 @@ def answer_query(user_input):
 
     # Configuring the model parameters, preparing for inference
     # TODO: TUNE THESE PARAMETERS TO OPTIMIZE FOR YOUR USE CASE
-    prompt = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
-        "temperature": 0.5,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": formatted_prompt_data
-                    }
-                ]
-            }
-        ]
+    # prompt = {
+    #     "max_tokens": 4096,
+    #     "temperature": 0.5,
+    #     "messages": [
+    #         {
+    #             "role": "user",
+    #             "content": [
+    #                 {
+    #                     "type": "text",
+    #                     "text": formatted_prompt_data
+    #                 }
+    #             ]
+    #         }
+    #     ]
+    # }
+    
+    prompt =    {
+        "prompt": formatted_prompt_data,
+        "max_tokens" : 4096,
+        "temperature": 0.7,
+        "top_p": 0.7,
+        "top_k": 50
     }
     
     # formatting the prompt as a json string
     json_prompt = json.dumps(prompt)    
 
-    # invoking Claude3, passing in our prompt
-    response = bedrock.invoke_model(body=json_prompt, modelId="anthropic.claude-3-sonnet-20240229-v1:0",
-                                    accept="application/json", contentType="application/json")
-    # getting the response from Claude3 and parsing it to return to the end user
-    response_body = json.loads(response.get('body').read())
-    # the final string returned to the end user
-    answer = response_body['content'][0]['text']
-    # returning the final string to the end user
-    return answer
+    # get useLocal from env 
+    useLocal = os.getenv('use_Local')
+    if useLocal == "True":
+        response = call_llama_model(json_prompt)
+        result = {
+            "answer": response,
+            "context": userContexts
+        }
+        return result
+    else: 
+        # invoking Claude3, passing in our prompt
+        response = bedrock.invoke_model(body=json_prompt, modelId="mistral.mistral-large-2402-v1:0",
+                                        accept="application/json", contentType="application/json")
+        # getting the response from Claude3 and parsing it to return to the end user
+        response_body = json.loads(response.get('body').read())
+
+        # the final string returned to the end user
+        answer = response_body['outputs'][0]['text']
+
+        result = {
+            "answer": answer,
+            "context": userContexts
+        }
+        # returning the final string to the end user
+        return result
+    
+
+def call_llama_model(prompt):
+    url = "http://localhost:11434/api/generate"  # replace with your Ollama URL and port
+    headers = {"Content-Type": "application/json"}
+    data = {"model": "mistral", "prompt": prompt, "max_tokens": 60, "stream": False}
+
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+
+    if response.status_code == 200:
+        response_data = response.content.decode("utf-8")  # decode the bytes object to a string
+        response_data = json.loads(response_data)  # convert the string to a Python dictionary
+        model_output = response_data.get("response")
+        return model_output
+    else:
+        return None
